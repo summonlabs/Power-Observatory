@@ -268,9 +268,22 @@ that parks while another thread enters every public entry point.
 ## Build
 
 Requirements: a C++20 compiler, CMake 3.21 or newer, and a generator.
-Validated with MSVC 19.44 (Visual Studio 2022 Build Tools) and Ninja on Windows;
-GCC and Clang are supported by the build files but were not exercised in this
-environment. There are no third-party dependencies.
+There are no third-party dependencies.
+
+Both implementations of the platform layer - the Win32 one and the POSIX one -
+are compiled and executed. Validated toolchains:
+
+| Platform | Toolchain | Configurations exercised |
+| --- | --- | --- |
+| Windows 11 | MSVC 19.44 (Visual Studio 2022 Build Tools), Ninja | Release, Debug, AddressSanitizer |
+| Ubuntu 24.04 | GCC 13, Ninja | Release, Debug, AddressSanitizer + UndefinedBehaviorSanitizer |
+| Ubuntu 24.04 | Clang 18, Ninja | Release, Debug, AddressSanitizer + UndefinedBehaviorSanitizer |
+
+The runtime has one real dependency, and it is not a third-party library: it owns
+a worker thread and synchronises with mutexes and condition variables, so on
+POSIX it needs the system thread library. That dependency is declared `PUBLIC` on
+the exported target and resolved by the package config with `find_dependency`,
+so a consumer never has to add `-pthread` or `Threads::Threads` itself.
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -285,6 +298,7 @@ ctest --test-dir build --output-on-failure
 | `PO_BUILD_BENCHMARKS` | `ON` when top level | build the benchmark harness and the `bench` target |
 | `PO_WARNINGS_AS_ERRORS` | `ON` | treat first-party diagnostics as errors |
 | `PO_ENABLE_ASAN` | `OFF` | compile and link with AddressSanitizer |
+| `PO_ENABLE_UBSAN` | `OFF` | compile and link with UndefinedBehaviorSanitizer; ignored on MSVC, which has no equivalent |
 | `PO_ENABLE_STATIC_ANALYSIS` | `OFF` | run `/analyze` during the build |
 
 First-party code compiles warning-free under `/W4 /permissive- /WX` with MSVC and
@@ -438,20 +452,31 @@ target_link_libraries(my-target PRIVATE PowerObservatory::power_observatory)
 The package installs `PowerObservatoryConfig.cmake`,
 `PowerObservatoryConfigVersion.cmake` (SameMajorVersion) and an exported target
 set under `lib/cmake/PowerObservatory`, plus the public headers under `include/`
-and the command line tool under `bin/`.
+and the command line tool under `bin/`. The config file calls
+`find_dependency(Threads)`, so the thread library is resolved on the consumer's
+behalf rather than left as an undocumented link requirement.
 
 ## Validation
 
-Everything below was executed in this repository's build environment (Windows,
-MSVC 19.44, Ninja). Nothing is extrapolated.
+Everything below was executed against this revision. Nothing is extrapolated.
 
-| Configuration | Command | Result |
-| --- | --- | --- |
-| Release | `cmake --build build-release` | clean, zero first-party warnings at `/W4 /permissive- /WX` |
-| Debug | `cmake --build build-debug` | clean, zero first-party warnings |
-| Release | `ctest --test-dir build-release` | see the test table below |
-| Debug | `ctest --test-dir build-debug` | see the test table below |
-| AddressSanitizer | `ctest --test-dir build-asan` | see the test table below |
+| Platform | Configuration | Build | Suite |
+| --- | --- | --- | --- |
+| Windows / MSVC | Release | clean, zero first-party warnings at `/W4 /permissive- /WX` | 15/15 |
+| Windows / MSVC | Debug | clean, zero first-party warnings | 15/15 |
+| Windows / MSVC | AddressSanitizer | clean | 15/15 |
+| Linux / GCC 13 | Release | clean, zero first-party warnings at `-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror` | 15/15 |
+| Linux / GCC 13 | Debug | clean, zero first-party warnings | 15/15 |
+| Linux / GCC 13 | AddressSanitizer + UndefinedBehaviorSanitizer | clean, `-fno-sanitize-recover=all` | 15/15 |
+| Linux / Clang 18 | Release | clean, zero first-party warnings | 15/15 |
+| Linux / Clang 18 | Debug | clean, zero first-party warnings | 15/15 |
+| Linux / Clang 18 | AddressSanitizer + UndefinedBehaviorSanitizer | clean, `-fno-sanitize-recover=all` | 15/15 |
+
+The same fifteen suites run everywhere. That matters most for the suites that
+exist to exercise the platform layer: on Linux they exercise `flock`, `pread`,
+`pwrite`, `ftruncate`, `fsync` and `posix_spawn`, and on Windows the
+`LockFileEx` and `_spawnv` equivalents, with no test skipped, weakened or
+substituted on either side.
 
 ### Test suites
 
@@ -491,9 +516,16 @@ Honesty about what was and was not exercised is part of the interface.
   killed and reopened, with the writer lock released by the operating system;
 * cross-process exclusion: a second real process refused the writer lock;
 * concurrency: real threads, real shared pointers, a real worker thread;
-* the CMake package: installed to a clean prefix and consumed out of tree by an
-  independent `find_package` project;
-* AddressSanitizer across the whole suite.
+* the CMake package: installed to a clean prefix on both Windows and Linux, and
+  consumed out of tree by an independent `find_package` project that builds and
+  runs;
+* the POSIX platform layer: `flock`-based writer exclusion across real
+  processes, the kernel releasing that lock when the owning process exits,
+  `pread` / `pwrite` / `ftruncate` / `fsync` durability, truncation and tail
+  repair, and `posix_spawn` child processes that are killed and reopened;
+* AddressSanitizer across the whole suite on both platforms, plus
+  UndefinedBehaviorSanitizer with `halt_on_error` on Linux;
+* both compilers on Linux, GCC and Clang, in Release and Debug.
 
 **SYNTHETIC** - modelled, not measured:
 
@@ -520,9 +552,9 @@ Honesty about what was and was not exercised is part of the interface.
   configured; with no declaration the gate is not evaluable;
 * measured ride-through autonomy is not modelled. The autonomy gate uses the
   weakest **declared** autonomy below the live members and labels it as configured;
-* the POSIX branches of the file lock, file IO and process spawning are implemented
-  but were not compiled or executed in this environment. Only the Windows branches
-  carry validation evidence;
+* Linux is validated on x86-64 only. macOS, the BSDs and other architectures are
+  not exercised, and the POSIX behaviour that differs there - above all the file
+  locking primitive - is not claimed;
 * the declared topology is synthesized from a named scenario rather than exchanged
   with a topology authority. Topology interchange is an adjacent authority's
   contract and is deliberately out of scope;

@@ -412,15 +412,6 @@ namespace {
   return canonical_key(left) < canonical_key(right);
 }
 
-struct Key {
-  EntityRef entity;
-  MeasurementKind kind{MeasurementKind::ActivePower};
-  Phase phase{Phase::Total};
-
-  friend bool operator==(const Key&, const Key&) noexcept = default;
-  friend auto operator<=>(const Key&, const Key&) noexcept = default;
-};
-
 }  // namespace
 
 Result<EvidenceSet> EvidenceSet::build(std::vector<Measurement> measurements) {

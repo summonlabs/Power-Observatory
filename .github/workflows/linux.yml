@@ -1,0 +1,186 @@
+# Power Observatory - Linux portability and packaging validation.
+# Copyright 2026 Summon Software Labs. Apache License 2.0.
+#
+# This workflow exists to keep the POSIX support claims in the README honest.
+# Every job builds first-party code under the same warning policy used locally,
+# where a diagnostic is an error. No test is given a timeout anywhere: a hang is
+# a defect to be diagnosed, not something to be killed.
+name: Linux portability
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: 'gcc Release',   cxx: g++,     build_type: Release }
+          - { label: 'gcc Debug',     cxx: g++,     build_type: Debug }
+          - { label: 'clang Release', cxx: clang++, build_type: Release }
+          - { label: 'clang Debug',   cxx: clang++, build_type: Debug }
+    steps:
+      - uses: actions/checkout@v5
+      - name: Report the toolchain
+        run: |
+          set -eu
+          ${{ matrix.cxx }} --version
+          cmake --version
+          ninja --version
+      - name: Configure
+        run: |
+          set -eu
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+      - name: Build
+        run: |
+          set -eu
+          cmake --build build -- -k 0
+      - name: Report the build description
+        run: |
+          set -eu
+          ./build/power-observatory version
+      - name: Test
+        run: |
+          set -eu
+          ctest --test-dir build --output-on-failure
+      - name: The build must not dirty the worktree
+        run: |
+          set -eu
+          test -z "$(git status --porcelain)"
+
+  sanitizers:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: 'gcc asan+ubsan',   cxx: g++ }
+          - { label: 'clang asan+ubsan', cxx: clang++ }
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure
+        run: |
+          set -eu
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DPO_ENABLE_ASAN=ON \
+            -DPO_ENABLE_UBSAN=ON
+      - name: Build
+        run: |
+          set -eu
+          cmake --build build -- -k 0
+      - name: Report the build description
+        run: |
+          set -eu
+          ./build/power-observatory version
+      - name: Test under the sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: |
+          set -eu
+          ctest --test-dir build --output-on-failure
+
+  package:
+    name: install, package and downstream consumer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure
+        run: |
+          set -eu
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: |
+          set -eu
+          cmake --build build -- -k 0
+      - name: Install into a clean prefix
+        run: |
+          set -eu
+          cmake --install build --prefix "$RUNNER_TEMP/prefix"
+      - name: The package must be discoverable under its own name
+        run: |
+          set -eu
+          pkg="$RUNNER_TEMP/prefix/lib/cmake/PowerObservatory"
+          test -f "$pkg/PowerObservatoryConfig.cmake"
+          test -f "$pkg/PowerObservatoryConfigVersion.cmake"
+          test -f "$pkg/PowerObservatoryTargets.cmake"
+          grep -q 'PowerObservatory::power_observatory' "$pkg/PowerObservatoryTargets.cmake"
+          grep -q 'Threads::Threads' "$pkg/PowerObservatoryTargets.cmake"
+          grep -q 'find_dependency(Threads)' "$pkg/PowerObservatoryConfig.cmake"
+      - name: Build the out-of-tree consumer against the installed package
+        run: |
+          set -eu
+          cmake -S examples/consumer -B "$RUNNER_TEMP/consumer-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/prefix"
+          cmake --build "$RUNNER_TEMP/consumer-build"
+      - name: Run the consumer
+        run: |
+          set -eu
+          "$RUNNER_TEMP/consumer-build/po-consumer"
+      - name: Run the installed command line tool
+        run: |
+          set -eu
+          "$RUNNER_TEMP/prefix/bin/power-observatory" selfcheck --text
+      - name: The install must not dirty the worktree
+        run: |
+          set -eu
+          test -z "$(git status --porcelain)"
+
+  fresh-clone:
+    name: fresh clone of the remote release state
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Clone the remote at this ref
+        run: |
+          set -eu
+          git clone --quiet \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" \
+            "$RUNNER_TEMP/clone"
+          cd "$RUNNER_TEMP/clone"
+          git checkout --quiet "${{ github.ref_name }}"
+          echo "checked out: $(git rev-parse HEAD)"
+          test -z "$(git status --porcelain)"
+      - name: Configure
+        run: |
+          set -eu
+          cmake -S "$RUNNER_TEMP/clone" -B "$RUNNER_TEMP/clone-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: |
+          set -eu
+          cmake --build "$RUNNER_TEMP/clone-build" -- -k 0
+      - name: Test
+        run: |
+          set -eu
+          ctest --test-dir "$RUNNER_TEMP/clone-build" --output-on-failure
+      - name: Install into a clean prefix
+        run: |
+          set -eu
+          cmake --install "$RUNNER_TEMP/clone-build" --prefix "$RUNNER_TEMP/clone-prefix"
+      - name: Build and run the out-of-tree consumer
+        run: |
+          set -eu
+          cmake -S "$RUNNER_TEMP/clone/examples/consumer" -B "$RUNNER_TEMP/clone-consumer" \
+            -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/clone-prefix"
+          cmake --build "$RUNNER_TEMP/clone-consumer"
+          "$RUNNER_TEMP/clone-consumer/po-consumer"
+      - name: Run the installed command line tool
+        run: |
+          set -eu
+          "$RUNNER_TEMP/clone-prefix/bin/power-observatory" selfcheck --text

@@ -51,7 +51,7 @@ std::string build_log(std::string_view suite) {
     return std::string();
   }
   for (std::uint64_t index = 0; index < 3; ++index) {
-    if (!log.value().append(batch_for(index + 1, index + 1, 1000 + index))) {
+    if (!log.value().append(batch_for(index + 1, index + 1, 1000 + static_cast<QuantityRep>(index)))) {
       return std::string();
     }
   }

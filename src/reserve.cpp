@@ -256,10 +256,13 @@ Outcome<ReserveReport> compute_reserve(const ObservationContext& context, const 
         if (share) {
           report.supply_downstream_delta_ppm = share.value();
         }
-        const QuantityRep magnitude = delta < 0 ? (~delta + 1) : delta;
+        // The magnitude is computed in unsigned arithmetic: negating the most
+        // negative 64-bit value overflows a signed type, which is undefined
+        // behaviour even when the surrounding comparison would have coped.
+        const std::uint64_t magnitude = detail::magnitude(delta);
         const QuantityRep tolerance_raw =
             report.measured_load->raw() / 1000000 * context.policy.imbalance.tolerance_ppm.raw();
-        if (magnitude > tolerance_raw) {
+        if (tolerance_raw < 0 || magnitude > static_cast<std::uint64_t>(tolerance_raw)) {
           explanation.add(ReasonCode::SourceDisagreement, query.scope.to_string(),
                           "supply-side meters total " + quantity_text(*report.measured_load) +
                               " while downstream meters total " + quantity_text(*downstream.total) +

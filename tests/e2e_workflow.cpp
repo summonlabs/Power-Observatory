@@ -93,7 +93,7 @@ PO_TEST(e2e, the_whole_operator_workflow_holds_together) {
   PO_CHECK(answer_document.value().find("total_observed_load_w")->type() == JsonValue::Type::String);
   PO_CHECK(!answer_document.value().find("explanation")->find("reasons")->as_array().empty());
 
-  for (const std::string& command : {"flow", "attribution", "quality", "explain", "topology", "history"}) {
+  for (const char* command : {"flow", "attribution", "quality", "explain", "topology", "history"}) {
     const Run result = run({command, "--store", store});
     PO_CHECK_EQ(result.exit_code, 0);
     PO_CHECK(!result.out.empty());

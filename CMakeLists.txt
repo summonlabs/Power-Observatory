@@ -22,10 +22,16 @@ option(PO_BUILD_TESTS "Build the Power Observatory test suites" ${PROJECT_IS_TOP
 option(PO_BUILD_BENCHMARKS "Build the Power Observatory benchmark harness" ${PROJECT_IS_TOP_LEVEL})
 option(PO_WARNINGS_AS_ERRORS "Treat first-party compiler diagnostics as errors" ON)
 option(PO_ENABLE_ASAN "Build and link with AddressSanitizer where the toolchain supports it" OFF)
+option(PO_ENABLE_UBSAN "Build and link with UndefinedBehaviorSanitizer where the toolchain supports it" OFF)
 option(PO_ENABLE_STATIC_ANALYSIS "Run the platform static analyser as part of the build" OFF)
 
 if(PO_ENABLE_ASAN AND PO_ENABLE_STATIC_ANALYSIS)
   message(FATAL_ERROR "PO_ENABLE_ASAN and PO_ENABLE_STATIC_ANALYSIS cannot both be enabled: /analyze and /fsanitize=address are incompatible")
+endif()
+
+if(PO_ENABLE_UBSAN AND MSVC)
+  message(STATUS "PO_ENABLE_UBSAN has no MSVC equivalent and is ignored on this toolchain")
+  set(PO_ENABLE_UBSAN OFF)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -87,10 +93,36 @@ function(po_apply_warning_policy target)
     if(PO_WARNINGS_AS_ERRORS)
       target_compile_options(${target} PRIVATE -Werror)
     endif()
+    # flock(2) and posix_spawn(3) are declared only while _DEFAULT_SOURCE (or
+    # _GNU_SOURCE) is in effect. CMAKE_CXX_EXTENSIONS is OFF, so the compiler is
+    # invoked with -std=c++20 and __STRICT_ANSI__ is defined, which would
+    # otherwise hide them. The macro is set explicitly instead of relying on
+    # libstdc++ happening to define _GNU_SOURCE before the first system header.
+    target_compile_definitions(${target} PRIVATE _DEFAULT_SOURCE)
+    set(po_sanitizers "")
     if(PO_ENABLE_ASAN)
-      target_compile_options(${target} PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-      target_link_options(${target} PRIVATE -fsanitize=address)
-      target_compile_definitions(${target} PRIVATE PO_ASAN_ENABLED=1)
+      list(APPEND po_sanitizers address)
+    endif()
+    if(PO_ENABLE_UBSAN)
+      list(APPEND po_sanitizers undefined)
+      # Undefined behaviour is a defect, not a recoverable event: stop at the
+      # first finding rather than logging it and carrying on.
+      target_compile_options(${target} PRIVATE -fno-sanitize-recover=all)
+    endif()
+    if(po_sanitizers)
+      string(JOIN "," po_sanitizer_list ${po_sanitizers})
+      target_compile_options(${target} PRIVATE -fsanitize=${po_sanitizer_list} -fno-omit-frame-pointer)
+      target_link_options(${target} PRIVATE -fsanitize=${po_sanitizer_list})
+    endif()
+    # The build description reports which sanitizers are active. GCC defines
+    # __SANITIZE_ADDRESS__ but has no macro at all for -fsanitize=undefined, so
+    # the compiler builtins alone would describe a combined build as address
+    # only. The build system knows what it actually passed, so it says so.
+    if(PO_ENABLE_ASAN)
+      target_compile_definitions(${target} PRIVATE PO_SANITIZER_ASAN=1)
+    endif()
+    if(PO_ENABLE_UBSAN)
+      target_compile_definitions(${target} PRIVATE PO_SANITIZER_UBSAN=1)
     endif()
   endif()
 endfunction()
@@ -98,6 +130,13 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Core library
 # ---------------------------------------------------------------------------
+# The runtime owns a worker thread and synchronises with mutexes and condition
+# variables. On POSIX those symbols live in the system thread library, and a
+# downstream consumer linking the installed archive needs exactly the same
+# dependency, so it is declared PUBLIC and is re-exported through the package.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 set(PO_CORE_SOURCES
   src/version.cpp
   src/reason.cpp
@@ -129,6 +168,8 @@ set(PO_CORE_SOURCES
 
 add_library(power_observatory STATIC ${PO_CORE_SOURCES})
 add_library(PowerObservatory::power_observatory ALIAS power_observatory)
+
+target_link_libraries(power_observatory PUBLIC Threads::Threads)
 
 target_include_directories(power_observatory
   PUBLIC

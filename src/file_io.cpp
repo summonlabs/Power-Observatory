@@ -28,11 +28,17 @@ namespace po {
 namespace {
 
 [[nodiscard]] std::filesystem::path to_path(const std::string& utf8) {
-  // The public surface is UTF-8 on every platform. Building the path from a
-  // char8_t sequence makes std::filesystem perform the correct UTF-8 to wide
-  // conversion on Windows instead of treating the bytes as the ANSI code page.
+  // The public surface is UTF-8 on every platform. On Windows the path must be
+  // built from a char8_t sequence so that std::filesystem performs the correct
+  // UTF-8 to wide conversion instead of interpreting the bytes as the ANSI code
+  // page. On POSIX the native narrow encoding is already UTF-8, so the bytes are
+  // handed over directly and no char8_t dependency is needed at all.
+#ifdef _WIN32
   return std::filesystem::path(
       std::u8string(reinterpret_cast<const char8_t*>(utf8.data()), utf8.size()));
+#else
+  return std::filesystem::path(utf8);
+#endif
 }
 
 [[nodiscard]] std::uint64_t process_identifier() noexcept {
@@ -514,15 +520,15 @@ Status write_file_atomically(const std::string& path, std::string_view text) {
 
 Status remove_file(const std::string& path) noexcept {
   std::error_code error;
-  const bool removed = std::filesystem::remove(to_path(path), error);
-  if (error && error.value() != 0) {
+  static_cast<void>(std::filesystem::remove(to_path(path), error));
+  if (error) {
+    std::error_code existence_error;
     // A missing file is not a failure: removal is idempotent.
-    if (!std::filesystem::exists(to_path(path), error)) {
+    if (!std::filesystem::exists(to_path(path), existence_error)) {
       return ok_status();
     }
     return fail(ReasonCode::IoError, "could not remove '" + path + "': " + error.message());
   }
-  (void)removed;
   return ok_status();
 }
 

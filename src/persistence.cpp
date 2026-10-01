@@ -524,7 +524,8 @@ Result<EvidenceLog> EvidenceLog::open(const std::string& path, Epoch epoch, cons
   return Result<EvidenceLog>(std::move(log));
 }
 
-Status EvidenceLog::create_fresh(const std::string& path, Epoch epoch, const StoreOpenOptions& options) {
+Status EvidenceLog::create_fresh(const std::string& path, Epoch epoch,
+                                 [[maybe_unused]] const StoreOpenOptions& options) {
   const std::string directory = parent_directory(path);
   Status status = create_directories(directory);
   if (!status) {
@@ -571,7 +572,6 @@ Status EvidenceLog::create_fresh(const std::string& path, Epoch epoch, const Sto
                                              std::to_string(kEvidenceLogFormatVersion),
                                          {}});
   evidence_dirty_ = true;
-  (void)options;
   return ok_status();
 }
 
@@ -735,8 +735,9 @@ Result<EvidenceLog::Loaded> EvidenceLog::load(const std::string& path, const Sto
     return Error(ReasonCode::WriterLockHeld,
                  "evidence log '" + path + "' is currently owned by a writer; a read-only load cannot proceed");
   }
-  const FileLock held = std::move(lock).value();
-  (void)held;
+  // The shared lock is held for the whole read and released when it leaves
+  // scope. It exists to exclude a concurrent writer, not to be inspected.
+  [[maybe_unused]] const FileLock held = std::move(lock).value();
 
   Result<FileHandle> handle = FileHandle::open_read(path);
   if (!handle) {

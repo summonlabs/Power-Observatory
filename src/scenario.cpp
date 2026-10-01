@@ -12,15 +12,6 @@ namespace {
 
 constexpr QuantityRep kKilowatt = 1000000;  // milliwatts
 
-[[nodiscard]] std::string label(std::string_view prefix, std::size_t index) {
-  return std::string(prefix) + "-" + std::to_string(index);
-}
-
-struct PathPlan {
-  std::vector<LoadId> loads;
-  std::map<LoadId, Power> base_load;
-};
-
 }  // namespace
 
 std::uint64_t DeterministicRandom::next() noexcept {

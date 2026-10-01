@@ -22,7 +22,6 @@ Provenance live_provenance(Sequence sequence = Sequence{1}) {
 
 PO_TEST(freshness, bands_are_decided_by_measured_age) {
   FreshnessModel model;
-  const MonotonicInstant now = MonotonicInstant::from_nanos(0);
   const Provenance provenance = live_provenance();
 
   PO_CHECK_EQ(model.assess(provenance, Timestamp{}, MonotonicInstant::from_nanos(0)).classification,
@@ -33,7 +32,6 @@ PO_TEST(freshness, bands_are_decided_by_measured_age) {
              FreshnessClass::Stale);
   PO_CHECK_EQ(model.assess(provenance, Timestamp{}, MonotonicInstant::from_nanos(120 * kSecond)).classification,
              FreshnessClass::Expired);
-  (void)now;
 }
 
 PO_TEST(freshness, recovered_evidence_is_never_fresh) {

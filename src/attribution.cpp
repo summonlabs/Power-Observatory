@@ -119,7 +119,6 @@ Outcome<AttributionReport> compute_attribution(const ObservationContext& context
       }
 
       Accumulator<PowerUnitTag> child_total;
-      bool child_conflict = false;
       for (const EntityRef& child : children) {
         const MeasurementView child_view = select_active_power(context, child);
         if (!child_view.usable()) {
@@ -140,8 +139,6 @@ Outcome<AttributionReport> compute_attribution(const ObservationContext& context
           explanation.add(*child_view.freshness.anomaly, child.to_string(), child_view.freshness.anomaly_detail);
         }
       }
-      (void)child_conflict;
-
       QuantityRep residual_raw{};
       if (!checked_sub(parent_value.value().raw(), child_total.saturated_total().raw(), residual_raw)) {
         record.state = EvidenceState::Indeterminate;

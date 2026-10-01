@@ -116,25 +116,6 @@ template <class T>
   return Error(ReasonCode::SchemaViolation, "unrecognized authority '" + std::string(text) + "'");
 }
 
-[[nodiscard]] Result<EntityKind> parse_entity_kind(std::string_view text) {
-  static constexpr std::array<std::pair<std::string_view, EntityKind>, 8> kTable = {{
-      {"feed", EntityKind::Feed},
-      {"bus", EntityKind::Bus},
-      {"ups", EntityKind::Ups},
-      {"generator", EntityKind::Generator},
-      {"pdu", EntityKind::Pdu},
-      {"circuit", EntityKind::Circuit},
-      {"load", EntityKind::Load},
-      {"redundancy_group", EntityKind::RedundancyGroup},
-  }};
-  for (const auto& entry : kTable) {
-    if (entry.first == text) {
-      return entry.second;
-    }
-  }
-  return Error(ReasonCode::SchemaViolation, "unrecognized entity kind '" + std::string(text) + "'");
-}
-
 [[nodiscard]] Result<Phase> parse_phase(std::string_view text) {
   static constexpr std::array<std::pair<std::string_view, Phase>, 9> kTable = {{
       {"total", Phase::Total}, {"a", Phase::A},     {"b", Phase::B},      {"c", Phase::C},

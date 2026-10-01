@@ -132,7 +132,7 @@ struct ChildProcess {
   return wait_child(child);
 }
 
-[[nodiscard]] inline void clear(std::string_view suite) {
+inline void clear(std::string_view suite) {
   std::error_code error;
   std::filesystem::remove_all(scratch_root() / std::string(suite), error);
 }
@@ -148,7 +148,7 @@ struct ChildProcess {
 // Evidence that has been delivered by this process, so it is eligible for the
 // fresh classification. Tests that specifically exercise recovered evidence
 // rebuild it through the durable store instead.
-[[nodiscard]] inline void stamp_live(po::Scenario& scenario, po::Timestamp now, po::MonotonicInstant steady) {
+inline void stamp_live(po::Scenario& scenario, po::Timestamp now, po::MonotonicInstant steady) {
   for (po::EvidenceBatch& batch : scenario.batches) {
     po::stamp_delivery(batch, now, steady);
   }

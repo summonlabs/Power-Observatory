@@ -252,14 +252,6 @@ struct LoadedStore {
                          SystemClock::instance().steady_now());
 }
 
-[[nodiscard]] JsonValue results_json(const std::vector<IngestResult>& results) {
-  JsonValue array = JsonValue::array();
-  for (const IngestResult& result : results) {
-    array.push(to_json(result));
-  }
-  return array;
-}
-
 int command_version(const Invocation& invocation, std::ostream& out) {
   if (wants_json(invocation)) {
     JsonValue document = JsonValue::object();

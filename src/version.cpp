@@ -37,20 +37,6 @@ constexpr std::string_view kBuildMode =
 #endif
     ;
 
-constexpr std::string_view kSanitizer =
-#if defined(__SANITIZE_ADDRESS__)
-    "asan"
-#elif defined(__has_feature)
-#if __has_feature(address_sanitizer)
-    "asan"
-#else
-    "none"
-#endif
-#else
-    "none"
-#endif
-    ;
-
 // Assembled at first use so that build_info() returns a stable, allocation-free
 // view that is identical in every process built the same way.
 const std::string& assembled() {
@@ -67,7 +53,7 @@ const std::string& assembled() {
     text.append(" mode=");
     text.append(kBuildMode);
     text.append(" sanitizer=");
-    text.append(kSanitizer);
+    text.append(kSanitizerDescription);
     return text;
   }();
   return value;

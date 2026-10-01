@@ -215,11 +215,9 @@ FreshnessAssessment FreshnessModel::assess(const EvidenceSet& evidence, Timestam
       continue;
     }
     if (rank(current.classification) > rank(aggregate.classification)) {
-      const std::string previous_detail = aggregate.detail;
       aggregate = current;
       aggregate.detail = current.detail + " (least trustworthy of " +
                          std::to_string(evidence.measurements().size()) + " measurements)";
-      (void)previous_detail;
     }
     if (current.anomaly.has_value() && !aggregate.anomaly.has_value()) {
       aggregate.anomaly = current.anomaly;

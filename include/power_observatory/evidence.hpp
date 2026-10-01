@@ -68,6 +68,18 @@ enum class EntityKind : std::uint8_t {
   RedundancyGroup = 8,
 };
 
+// Seven of the enumerators below share their spelling with the quantity aliases
+// declared in this namespace (po::Voltage, po::Current, po::Frequency and so on).
+// GCC's -Wshadow reports that as shadowing a global declaration, which is a false
+// positive: an enumerator of a scoped enumeration is not visible outside the
+// enumeration, so it cannot shadow anything, and the two names are never
+// ambiguous at a use site. Clang and MSVC do not report it. Renaming either set
+// would break the published API, so the diagnostic is disabled for exactly this
+// declaration, on GCC only.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
+#endif
 enum class MeasurementKind : std::uint8_t {
   ActivePower = 0,
   ApparentPower = 1,
@@ -79,6 +91,9 @@ enum class MeasurementKind : std::uint8_t {
   Energy = 7,
   Temperature = 8,
 };
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 enum class Phase : std::uint8_t {
   Total = 0,
