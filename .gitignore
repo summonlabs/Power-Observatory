@@ -1,0 +1,33 @@
+# Build trees and generated intermediates
+/build/
+/out/
+/install/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+*.obj
+*.o
+*.lib
+*.a
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.iobj
+*.ipdb
+
+# Editor and tooling scratch
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+compile_commands.json
+
+# Runtime scratch produced by the CLI during local experiments
+*.poev
+*.poev.lock
+*.poev.tmp
