@@ -437,7 +437,7 @@ target_link_libraries(my-target PRIVATE PowerObservatory::power_observatory)
 
 The package installs `PowerObservatoryConfig.cmake`,
 `PowerObservatoryConfigVersion.cmake` (SameMajorVersion) and an exported target
-set under `lib/cmake/power-observatory`, plus the public headers under `include/`
+set under `lib/cmake/PowerObservatory`, plus the public headers under `include/`
 and the command line tool under `bin/`.
 
 ## Validation

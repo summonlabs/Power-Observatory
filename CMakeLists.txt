@@ -210,15 +210,20 @@ endif()
 
 install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 
+# The package directory must be named after the package. CMake searches
+# <prefix>/lib/cmake/<name>*/ for <name>Config.cmake, and a directory named
+# "power-observatory" does not match the package name "PowerObservatory".
+set(PO_CMAKE_PACKAGE_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/PowerObservatory")
+
 install(EXPORT PowerObservatoryTargets
   FILE PowerObservatoryTargets.cmake
   NAMESPACE PowerObservatory::
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/power-observatory")
+  DESTINATION "${PO_CMAKE_PACKAGE_DIR}")
 
 configure_package_config_file(
   cmake/PowerObservatoryConfig.cmake.in
   "${CMAKE_CURRENT_BINARY_DIR}/PowerObservatoryConfig.cmake"
-  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/power-observatory")
+  INSTALL_DESTINATION "${PO_CMAKE_PACKAGE_DIR}")
 
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/PowerObservatoryConfigVersion.cmake"
@@ -228,4 +233,4 @@ write_basic_package_version_file(
 install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/PowerObservatoryConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/PowerObservatoryConfigVersion.cmake"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/power-observatory")
+  DESTINATION "${PO_CMAKE_PACKAGE_DIR}")
