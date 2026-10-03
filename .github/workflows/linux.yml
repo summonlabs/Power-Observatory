@@ -3,8 +3,7 @@
 #
 # This workflow exists to keep the POSIX support claims in the README honest.
 # Every job builds first-party code under the same warning policy used locally,
-# where a diagnostic is an error. No test is given a timeout anywhere: a hang is
-# a defect to be diagnosed, not something to be killed.
+# where a diagnostic is an error.
 name: Linux portability
 
 on:
